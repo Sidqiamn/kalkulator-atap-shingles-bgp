@@ -24,7 +24,8 @@ function loadState() {
     if (!raw) return null;
     const s = JSON.parse(raw);
     if (!s || !Array.isArray(s.planes) || !s.planes.length) return null;
-    const planes = s.planes.map(normalizePlane);
+    // Waste yang tidak diubah manual ikut rekomendasi terbaru di config.js
+    const planes = s.planes.map((p) => withRec(normalizePlane(p)));
     bumpIdSeed(planes);
     const product = PRODUCTS.some((p) => p.id === s.product) ? s.product : DEFAULT_PRODUCT;
     const tpl = s.tpl in TEMPLATES || s.tpl === 'custom' ? s.tpl : 'custom';
