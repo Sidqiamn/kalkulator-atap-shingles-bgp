@@ -9,9 +9,9 @@
  * Boleh desimal, contoh: 12.5
  */
 export const WASTE_REKOMENDASI = {
-  rect: 10, // Persegi panjang
-  trap: 12, // Trapesium
-  tri: 15, // Segitiga
+  rect: 1, // Persegi panjang
+  trap: 2, // Trapesium
+  tri: 2, // Segitiga
   luasAktual: 10, // Mode "Luas Aktual" (bentuk bidang tidak dipilih)
 };
 
@@ -20,10 +20,10 @@ export const WASTE_REKOMENDASI = {
  * Sumber: E-Catalog GNET Atap Shingles 2026 — konfirmasi sebelum penawaran final.
  */
 export const PRODUCTS = [
-  { id: 'mosaic', name: 'Mosaic', coverage: 2.99 },
-  { id: 'fish', name: 'Fish Scale', coverage: 3.1 },
-  { id: 'laminated', name: 'Laminated', coverage: 2.32 },
-  { id: 'single', name: 'Single Layer', coverage: 3.1 },
+  { id: 'mosaic', name: 'Mosaic', coverage: 2.59 },
+  { id: 'fish', name: 'Fish Scale', coverage: 2.64 },
+  { id: 'laminated', name: 'Laminated', coverage: 2.43 },
+  { id: 'single', name: 'Single Layer', coverage: 2.65 },
 ];
 export const DEFAULT_PRODUCT = 'fish';
 

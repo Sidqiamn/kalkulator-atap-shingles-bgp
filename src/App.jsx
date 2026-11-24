@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PRODUCTS, DEFAULT_PRODUCT } from './config';
 import { TEMPLATES } from './lib/constants';
-import { makePlane, normalizePlane, bumpIdSeed, withRec, evalPlane, summarize, hasData, carryFrom } from './lib/calc';
+import { makePlane, normalizePlane, bumpIdSeed, withRec, evalPlane, summarize, hasData, carryFrom, resolvePlanes, planesForTemplate, fitsTemplate } from './lib/calc';
 import { buildSummary } from './lib/summary';
 import { m2 } from './lib/format';
 import ProjectInfo from './components/ProjectInfo';
@@ -24,10 +24,16 @@ function loadState() {
     if (!raw) return null;
     const s = JSON.parse(raw);
     if (!s || !Array.isArray(s.planes) || !s.planes.length) return null;
-    const planes = s.planes.map(normalizePlane);
+    // Waste yang tidak diubah manual ikut rekomendasi terbaru di config.js
+    let planes = s.planes.map((p) => withRec(normalizePlane(p)));
     bumpIdSeed(planes);
     const product = PRODUCTS.some((p) => p.id === s.product) ? s.product : DEFAULT_PRODUCT;
-    const tpl = s.tpl in TEMPLATES || s.tpl === 'custom' ? s.tpl : 'custom';
+    let tpl = s.tpl in TEMPLATES || s.tpl === 'custom' ? s.tpl : 'custom';
+    // Draft dari versi lama (Pelana/Limasan tanpa bidang otomatis): pertahankan isinya sebagai Kustom
+    if (tpl !== 'custom' && !fitsTemplate(TEMPLATES[tpl], planes)) {
+      tpl = 'custom';
+      planes = planes.map((p) => ({ ...p, mirrorOf: null }));
+    }
     return { project: s.project || '', date: s.date || today(), product, tpl, planes };
   } catch {
     return null;
@@ -66,7 +72,10 @@ export default function App() {
   const [saved, setSaved] = useState(false);
 
   const product = PRODUCTS.find((p) => p.id === state.product) ?? PRODUCTS[0];
-  const results = useMemo(() => state.planes.map(evalPlane), [state.planes]);
+  const fixedTpl = !!TEMPLATES[state.tpl]?.fixed;
+  // Bidang yang otomatis sama (mis. Sisi belakang) memakai data bidang sumbernya
+  const view = useMemo(() => resolvePlanes(state.planes), [state.planes]);
+  const results = useMemo(() => view.map(evalPlane), [view]);
   const sum = useMemo(() => summarize(results, product.coverage), [results, product.coverage]);
 
   useEffect(() => {
@@ -105,8 +114,8 @@ export default function App() {
   const applyTemplate = (k) => {
     if (k === state.tpl) return;
     const snapshot = state.planes.some(hasData) ? { tpl: state.tpl, planes: state.planes } : null;
-    const carry = carryFrom(state.planes.find((p) => p.mode !== 'area'));
-    const planes = TEMPLATES[k].planes.map(([name, shape]) => makePlane({ ...carry, name, shape }));
+    const carry = carryFrom(view.find((p) => p.mode !== 'area'));
+    const planes = planesForTemplate(TEMPLATES[k].planes, carry);
     setState((s) => ({ ...s, tpl: k, planes }));
     setTplUndo(snapshot);
     setCollapsed(new Set());
@@ -119,16 +128,18 @@ export default function App() {
   };
 
   const addPlane = () => {
-    const np = makePlane(carryFrom(state.planes[state.planes.length - 1]));
+    if (fixedTpl) return;
+    const np = makePlane(carryFrom(view[view.length - 1]));
     setState((s) => ({ ...s, tpl: 'custom', planes: [...s.planes, np] }));
     setTplUndo(null);
     scrollToPlane(np.id);
   };
 
   const duplicatePlane = (id) => {
+    if (fixedTpl) return;
     const idx = state.planes.findIndex((p) => p.id === id);
-    const src = state.planes[idx];
-    const copy = makePlane({ ...src, name: src.name ? `${src.name} (salinan)` : '' });
+    const src = view[idx];
+    const copy = makePlane({ ...src, mirrorOf: null, name: src.name ? `${src.name} (salinan)` : '' });
     setState((s) => {
       const planes = [...s.planes];
       planes.splice(idx + 1, 0, copy);
@@ -139,6 +150,7 @@ export default function App() {
   };
 
   const removePlane = (id) => {
+    if (fixedTpl) return;
     const idx = state.planes.findIndex((p) => p.id === id);
     const removed = state.planes[idx];
     const prevTpl = state.tpl;
@@ -176,7 +188,7 @@ export default function App() {
 
   const copySummary = async () => {
     if (!sum.complete) return;
-    const ok = await copyText(buildSummary({ state, product, planes: state.planes, results, sum }));
+    const ok = await copyText(buildSummary({ state, product, planes: view, results, sum }));
     setToast({ msg: ok ? 'Ringkasan disalin ke clipboard' : 'Browser membatasi fitur salin. Gunakan Cetak / PDF.' });
   };
 
@@ -228,11 +240,12 @@ export default function App() {
 
           <Section id="bidang" step="02" title="Bidang Atap" subtitle="Isi ukuran setiap bidang. Waste dihitung per bidang sesuai bentuknya, lalu semua bidang dijumlahkan.">
             <div className="space-y-4">
-              {state.planes.map((p, i) => (
+              {view.map((p, i) => (
                 <PlaneCard
                   key={p.id}
                   plane={p}
                   index={i}
+                  locked={fixedTpl}
                   result={results[i]}
                   collapsed={collapsed.has(p.id)}
                   onToggle={() => toggleCollapse(p.id)}
@@ -245,13 +258,15 @@ export default function App() {
                 <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Belum ada bidang. Tambahkan bidang atau pilih bentuk atap di atas.</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={addPlane}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-200 bg-brand-50/50 px-4 py-4 text-sm font-extrabold text-navy transition hover:border-brand-500 hover:bg-brand-50 print:hidden"
-            >
-              <IconPlus /> Tambah bidang atap
-            </button>
+            {!fixedTpl && (
+              <button
+                type="button"
+                onClick={addPlane}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-200 bg-brand-50/50 px-4 py-4 text-sm font-extrabold text-navy transition hover:border-brand-500 hover:bg-brand-50 print:hidden"
+              >
+                <IconPlus /> Tambah bidang atap
+              </button>
+            )}
 
             <details className="group rounded-2xl bg-slate-50 p-4 text-[13px] leading-relaxed text-slate-600 ring-1 ring-slate-100 print:hidden">
               <summary className="cursor-pointer list-none font-bold text-navy">
@@ -269,7 +284,7 @@ export default function App() {
         </div>
 
         <aside id="hasil" className="lg:sticky lg:top-6 lg:self-start print:mt-6">
-          <ResultPanel sum={sum} product={product} planes={state.planes} results={results} onCopy={copySummary} onPrint={() => window.print()} onReset={resetAll} onJump={scrollToPlane} />
+          <ResultPanel sum={sum} product={product} planes={view} results={results} onCopy={copySummary} onPrint={() => window.print()} onReset={resetAll} onJump={scrollToPlane} />
         </aside>
       </main>
 

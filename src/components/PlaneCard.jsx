@@ -62,7 +62,58 @@ function Metric({ label, value, strong }) {
   );
 }
 
-export default function PlaneCard({ plane: p, index, result: r, collapsed, onToggle, onChange, onRemove, onDuplicate }) {
+function NameInput({ p, index, onChange }) {
+  return (
+    <input
+      value={p.name}
+      onChange={(e) => onChange({ name: e.target.value })}
+      placeholder={`Bidang ${index + 1} — beri nama, mis. Sisi depan`}
+      aria-label={`Nama bidang ${index + 1}`}
+      maxLength={70}
+      className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[15px] font-bold text-ink outline-none transition placeholder:font-medium placeholder:text-slate-400 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100"
+    />
+  );
+}
+
+function Metrics({ r }) {
+  return (
+    <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50 text-center ring-1 ring-slate-100">
+      <Metric label="Luas permukaan" value={r.area !== undefined ? m2(r.area) : '—'} />
+      <Metric label={r.status === 'ok' ? `Waste ${inputNum(r.waste)}%` : 'Waste'} value={r.status === 'ok' ? `+${m2(r.extra)}` : '—'} />
+      <Metric label="Luas order" value={r.status === 'ok' ? m2(r.order) : '—'} strong />
+    </div>
+  );
+}
+
+/** Bidang yang otomatis sama dengan bidang lain (Sisi belakang / Sisi kanan) */
+function MirrorCard({ plane: p, index, result: r, onChange }) {
+  const src = p.mirrorName || 'bidang sumber';
+  const detail = p.mode === 'area' ? 'Luas aktual' : `${SHAPES[p.shape]} · ${MODES[p.mode].label}`;
+  return (
+    <article id={`plane-${p.id}`} className="animate-slide-up overflow-hidden rounded-2xl border border-dashed border-brand-200 bg-white print:break-inside-avoid">
+      <header className="flex items-center gap-2 border-b border-brand-100 bg-brand-50/60 py-2.5 pl-3 pr-3 sm:gap-3 sm:pl-4">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-100 text-sm font-extrabold text-navy">{index + 1}</span>
+        <NameInput p={p} index={index} onChange={onChange} />
+        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-600 ring-1 ring-brand-200">Otomatis</span>
+      </header>
+      <div className="space-y-3 p-4 sm:p-5">
+        <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600">
+          <IconCopy className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+          <span>
+            Ukuran, sudut, dan waste sama dengan <b className="text-navy">{src}</b> ({detail.toLowerCase()}). Untuk mengubah, isi di bidang {src}.
+          </span>
+        </p>
+        <Metrics r={r} />
+      </div>
+    </article>
+  );
+}
+
+export default function PlaneCard(props) {
+  return props.plane.mirrorOf != null ? <MirrorCard {...props} /> : <EditableCard {...props} />;
+}
+
+function EditableCard({ plane: p, index, result: r, locked, collapsed, onToggle, onChange, onRemove, onDuplicate }) {
   const isArea = p.mode === 'area';
   const isProj = p.mode === 'projection';
   const unknown = isProj && p.angleMode === 'unknown';
@@ -85,18 +136,15 @@ export default function PlaneCard({ plane: p, index, result: r, collapsed, onTog
     <article id={`plane-${p.id}`} className="animate-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm print:break-inside-avoid print:shadow-none">
       <header className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 py-2.5 pl-3 pr-2 sm:gap-3 sm:pl-4">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-navy text-sm font-extrabold text-white">{index + 1}</span>
-        <input
-          value={p.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-          placeholder={`Bidang ${index + 1} — beri nama, mis. Sisi depan`}
-          aria-label={`Nama bidang ${index + 1}`}
-          maxLength={70}
-          className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[15px] font-bold text-ink outline-none transition placeholder:font-medium placeholder:text-slate-400 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100"
-        />
+        <NameInput p={p} index={index} onChange={onChange} />
         <StatusBadge r={r} />
         <div className="flex items-center print:hidden">
-          <IconButton label={`Duplikat ${title}`} onClick={onDuplicate}><IconCopy /></IconButton>
-          <IconButton label={`Hapus ${title}`} onClick={onRemove} danger><IconTrash /></IconButton>
+          {!locked && (
+            <>
+              <IconButton label={`Duplikat ${title}`} onClick={onDuplicate}><IconCopy /></IconButton>
+              <IconButton label={`Hapus ${title}`} onClick={onRemove} danger><IconTrash /></IconButton>
+            </>
+          )}
           <IconButton label={collapsed ? `Buka ${title}` : `Ciutkan ${title}`} onClick={onToggle}>
             <IconChevron className={`h-4 w-4 transition ${collapsed ? '' : 'rotate-180'}`} />
           </IconButton>
@@ -114,7 +162,19 @@ export default function PlaneCard({ plane: p, index, result: r, collapsed, onTog
       ) : (
         <div className="space-y-5 p-4 sm:p-5">
           <Segmented label="Cara mengukur" options={MODE_OPTIONS} value={p.mode} onChange={setMode} />
-          {!isArea && <Segmented label="Bentuk bidang" options={SHAPE_OPTIONS} value={p.shape} onChange={(v) => onChange({ shape: v })} />}
+          {!isArea &&
+            (locked ? (
+              <div>
+                <p className="mb-1.5 text-xs font-semibold text-slate-600">Bentuk bidang</p>
+                <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] font-bold text-navy">
+                  <ShapeIcon shape={p.shape} className="h-4 w-7 text-slate-500" />
+                  {SHAPES[p.shape]}
+                  <span className="font-medium text-slate-400">· sesuai bentuk atap</span>
+                </p>
+              </div>
+            ) : (
+              <Segmented label="Bentuk bidang" options={SHAPE_OPTIONS} value={p.shape} onChange={(v) => onChange({ shape: v })} />
+            ))}
           {isProj && <Segmented label="Sudut kemiringan" cols={2} options={ANGLE_OPTIONS} value={p.angleMode} onChange={(v) => onChange({ angleMode: v })} />}
 
           <div className="print:hidden">
@@ -208,11 +268,7 @@ export default function PlaneCard({ plane: p, index, result: r, collapsed, onTog
             {fe.waste && <p className="mt-1.5 text-xs font-medium text-red-600">{fe.waste}</p>}
           </div>
 
-          <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50 text-center ring-1 ring-slate-100">
-            <Metric label="Luas permukaan" value={r.area !== undefined ? m2(r.area) : '—'} />
-            <Metric label={r.status === 'ok' ? `Waste ${inputNum(r.waste)}%` : 'Waste'} value={r.status === 'ok' ? `+${m2(r.extra)}` : '—'} />
-            <Metric label="Luas order" value={r.status === 'ok' ? m2(r.order) : '—'} strong />
-          </div>
+          <Metrics r={r} />
         </div>
       )}
     </article>

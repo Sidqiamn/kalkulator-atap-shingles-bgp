@@ -22,20 +22,27 @@ export const REC_NAMES = {
   luasAktual: 'luas aktual',
 };
 
+/**
+ * planes: [nama, bentuk, indeks bidang sumber?]
+ * Bila indeks sumber diisi, bidang itu otomatis sama dengan bidang sumbernya.
+ * fixed: jumlah & bentuk bidang tetap (tidak bisa tambah/hapus/ganti bentuk).
+ */
 export const TEMPLATES = {
   satu: { label: '1 Bidang', hint: 'hitung satu sisi', planes: [['', 'rect']] },
-  pelana: { label: 'Pelana', hint: '2 bidang', planes: [['Sisi depan', 'rect'], ['Sisi belakang', 'rect']] },
+  pelana: { label: 'Pelana', hint: '2 bidang', fixed: true, planes: [['Sisi depan', 'rect'], ['Sisi belakang', 'rect', 0]] },
   limasan: {
     label: 'Limasan',
     hint: '4 bidang',
-    planes: [['Sisi depan', 'trap'], ['Sisi belakang', 'trap'], ['Sisi kiri', 'tri'], ['Sisi kanan', 'tri']],
+    fixed: true,
+    planes: [['Sisi depan', 'trap'], ['Sisi belakang', 'trap', 0], ['Sisi kiri', 'tri'], ['Sisi kanan', 'tri', 2]],
   },
 };
 
 export const TEMPLATE_INFO = {
   satu: 'Pilih bentuk bidangnya di bagian Bidang Atap: persegi panjang, trapesium, atau segitiga. Cocok untuk atap miring satu arah atau menghitung satu sisi atap saja.',
-  pelana: '2 bidang persegi panjang. Dari denah: a = panjang atap (sejajar nok), t = ½ lebar denah. Biasanya sudut kedua sisi sama.',
+  pelana:
+    '2 bidang persegi panjang. Cukup isi Sisi depan, Sisi belakang otomatis sama. Dari denah: a = panjang atap (sejajar nok), t = ½ lebar denah.',
   limasan:
-    '2 trapesium + 2 segitiga. Dari denah: trapesium a = panjang denah, b = panjang nok, t = ½ lebar denah • segitiga a = lebar denah, t = ½ × (panjang denah − panjang nok).',
+    '2 trapesium + 2 segitiga. Cukup isi Sisi depan (trapesium) dan Sisi kiri (segitiga), Sisi belakang dan Sisi kanan otomatis sama. Dari denah: trapesium a = panjang denah, b = panjang nok, t = ½ lebar denah • segitiga a = lebar denah, t = ½ × (panjang denah − panjang nok).',
   custom: 'Susunan bidang sudah diubah manual. Pilih salah satu bentuk di atas untuk mulai ulang.',
 };

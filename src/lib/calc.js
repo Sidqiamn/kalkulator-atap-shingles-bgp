@@ -23,7 +23,45 @@ const PLANE_DEFAULTS = {
   area: '',
   waste: '',
   wasteManual: false,
+  mirrorOf: null, // id bidang sumber bila bidang ini otomatis sama (Pelana / Limasan)
 };
+
+/** Data yang diambil dari bidang sumber oleh bidang yang otomatis sama */
+const MIRRORED = ['mode', 'shape', 'angleMode', 'a', 'b', 't', 'angle', 'run', 'rise', 'area', 'waste', 'wasteManual'];
+
+/**
+ * Bidang dengan mirrorOf memakai ukuran, sudut, dan waste bidang sumbernya.
+ * Hasilnya dipakai untuk tampilan dan perhitungan; state asli tidak diubah.
+ */
+export function resolvePlanes(planes) {
+  const byId = new Map(planes.map((p) => [p.id, p]));
+  return planes.map((p) => {
+    if (p.mirrorOf == null) return p;
+    const src = byId.get(p.mirrorOf);
+    if (!src || src.mirrorOf != null) return { ...p, mirrorOf: null };
+    return { ...p, ...Object.fromEntries(MIRRORED.map((k) => [k, src[k]])), mirrorName: src.name };
+  });
+}
+
+/** Susun bidang untuk sebuah template, termasuk tautan bidang yang otomatis sama */
+export function planesForTemplate(tplPlanes, carry = {}) {
+  const made = [];
+  tplPlanes.forEach(([name, shape, src]) => {
+    made.push(src === undefined ? makePlane({ ...carry, name, shape }) : makePlane({ name, shape, mirrorOf: made[src].id }));
+  });
+  return made;
+}
+
+/** Cek apakah susunan bidang tersimpan masih cocok dengan template tetapnya */
+export function fitsTemplate(tpl, planes) {
+  if (!tpl?.fixed) return true;
+  return (
+    planes.length === tpl.planes.length &&
+    tpl.planes.every(([, shape, src], i) =>
+      src === undefined ? planes[i].mirrorOf == null && planes[i].shape === shape : planes[i].mirrorOf === planes[src].id,
+    )
+  );
+}
 
 /** Isi waste dengan rekomendasi bila belum diubah manual */
 export function withRec(p) {
@@ -31,7 +69,8 @@ export function withRec(p) {
 }
 
 export function makePlane(init = {}) {
-  return withRec({ ...PLANE_DEFAULTS, ...init, id: idSeed++ });
+  const { mirrorName, ...rest } = init;
+  return withRec({ ...PLANE_DEFAULTS, ...rest, id: idSeed++ });
 }
 
 export function normalizePlane(p) {

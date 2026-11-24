@@ -2,6 +2,7 @@ import { MODES, SHAPES, TEMPLATES } from './constants';
 import { fx, f1, f2, m2, num, formatDate, inputNum } from './format';
 
 function describe(p, r) {
+  if (p.mirrorOf != null) return `sama dengan ${p.mirrorName || 'bidang sumber'}`;
   if (p.mode === 'area') return 'luas aktual';
   const m = (x) => `${fx(num(x))} m`;
   let s = `${SHAPES[p.shape]}, ${MODES[p.mode].label.toLowerCase()}: a ${m(p.a)}`;
